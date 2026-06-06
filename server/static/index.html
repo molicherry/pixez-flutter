@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixEz Sync - Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#333}
+header{background:#2563eb;color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px}
+header button{background:#fff;color:#2563eb;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:13px}
+.container{max-width:900px;margin:24px auto;padding:0 16px}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:24px;margin-bottom:16px}
+.card h2{font-size:16px;margin-bottom:16px;color:#1e40af}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;margin-bottom:4px;font-weight:500;font-size:13px}
+.form-group input{width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:4px;font-size:14px}
+.btn{display:inline-block;padding:8px 20px;border-radius:4px;font-size:14px;cursor:pointer;border:none;font-weight:500}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-sm{padding:4px 12px;font-size:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb;font-size:13px}
+th{background:#f9fafb;font-weight:600}
+.status-ok{color:#16a34a}
+.status-err{color:#dc2626}
+#login-page,#dashboard{display:none}
+#login-page.active,#dashboard.active{display:block}
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e5e7eb}
+.tab{padding:8px 16px;cursor:pointer;border:none;background:none;font-size:14px;color:#6b7280}
+.tab.active{border-bottom:2px solid #2563eb;color:#2563eb;margin-bottom:-2px}
+.panel{display:none}
+.panel.active{display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>PixEz Sync Server</h1>
+  <div><span id="user-info"></span><button onclick="logout()" id="btn-logout" style="display:none">Logout</button></div>
+</header>
+
+<div class="container">
+  <div id="login-page" class="active">
+    <div class="card">
+      <h2>Login</h2>
+      <div class="form-group"><label>Server</label><input id="server-url" placeholder="http://localhost:8880" value=""></div>
+      <div class="form-group"><label>Username</label><input id="login-user" placeholder="admin"></div>
+      <div class="form-group"><label>Password</label><input id="login-pass" type="password"></div>
+      <button class="btn btn-primary" onclick="doLogin()" style="width:100%">Login</button>
+      <p id="login-error" style="color:#dc2626;margin-top:8px;font-size:13px"></p>
+    </div>
+  </div>
+
+  <div id="dashboard">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('my-data')">My Data</button>
+      <button class="tab" id="tab-admin" onclick="switchTab('admin')" style="display:none">User Management</button>
+    </div>
+
+    <div id="panel-my-data" class="panel active">
+      <div class="card"><h2>Sync Data Summary</h2><div id="my-data-content">Loading...</div></div>
+      <div class="card" id="browse-card" style="display:none">
+        <h2>Browse: <span id="browse-type"></span></h2>
+        <div style="margin-bottom:8px">
+          <button class="btn btn-sm" onclick="browsePage(-1)">Prev</button>
+          <span id="browse-page-info" style="margin:0 12px;font-size:13px"></span>
+          <button class="btn btn-sm" onclick="browsePage(1)">Next</button>
+        </div>
+        <div id="browse-content"></div>
+      </div>
+    </div>
+
+    <div id="panel-admin" class="panel">
+      <div class="card">
+        <h2>All Users</h2>
+        <table><thead><tr><th>ID</th><th>Username</th><th>Admin</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="user-list"></tbody></table>
+      </div>
+      <div class="card" id="user-detail-card" style="display:none">
+        <h2>User Data: <span id="detail-username"></span></h2>
+        <div id="user-detail-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let token='',isAdmin=false,userId=null,server='';
+
+function api(path,opt={}){
+  const h={'Content-Type':'application/json'};
+  if(token)h['Authorization']='Bearer '+token;
+  const url=server+path;
+  return fetch(url,{...opt,headers:{...h,...opt.headers}}).then(r=>r.json());
+}
+
+async function doLogin(){
+  server=document.getElementById('server-url').value.trim();
+  if(!server){server=window.location.origin}
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value.trim();
+  document.getElementById('login-error').textContent='';
+  try{
+    const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({username:u,password:p})});
+    if(!r.ok){document.getElementById('login-error').textContent=r.error;return}
+    token=r.data.token;userId=r.data.user.id;isAdmin=r.data.user.is_admin;
+    document.getElementById('login-page').classList.remove('active');
+    document.getElementById('dashboard').classList.add('active');
+    document.getElementById('btn-logout').style.display='';
+    document.getElementById('user-info').textContent=r.data.user.username+(r.data.user.is_admin?' (admin)':'');
+    if(isAdmin){document.getElementById('tab-admin').style.display=''}
+    loadMyData();
+    if(isAdmin)loadUsers();
+  }catch(e){document.getElementById('login-error').textContent=e.message}
+}
+
+function logout(){token='';isAdmin=false;userId=null;
+  document.getElementById('login-page').classList.add('active');
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('btn-logout').style.display='none';
+  document.getElementById('tab-admin').style.display='none';
+}
+
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(e=>e.classList.remove('active'));
+  if(t==='my-data'){document.querySelector('.tab:nth-child(1)').classList.add('active');document.getElementById('panel-my-data').classList.add('active');loadMyData()}
+  else{document.getElementById('tab-admin').classList.add('active');document.getElementById('panel-admin').classList.add('active');loadUsers()}
+}
+
+async function loadMyData(){
+  const div=document.getElementById('my-data-content');
+  try{
+    const r=await api('/api/admin/me/data');
+    if(!r.ok){div.innerHTML='<p class="status-err">Error: '+r.error+'</p>';return}
+    const d=r.data;
+    let h='<table><tr><th>Data Type</th><th>Records</th><th>Last Updated</th><th></th></tr>';
+    if(d.records&&d.records.length>0){
+      d.records.forEach(r=>h+='<tr><td>'+r.data_type+'</td><td>'+r.count+'</td><td>'+(r.last_updated||'-')+'</td>'+
+        '<td><button class="btn btn-sm btn-primary" onclick="browseRecords(\''+r.data_type+'\')">Browse</button></td></tr>');
+    }else{h+='<tr><td colspan="4">No data yet</td></tr>'}
+    h+='</table>';
+    if(d.settings){h+='<p style="margin-top:12px"><strong>Settings:</strong> '+JSON.stringify(d.settings).substring(0,200)+'</p>'}
+    div.innerHTML=h;
+  }catch(e){div.innerHTML='<p class="status-err">Failed to load</p>'}
+}
+
+let browseDataType='',browseOffset=0,browseTotal=0;
+
+async function browseRecords(dt,offset){
+  if(offset!==undefined)browseOffset=offset;else if(dt!==undefined)browseDataType=dt;browseOffset=Math.max(0,browseOffset);
+  document.getElementById('browse-card').style.display='';
+  document.getElementById('browse-type').textContent=browseDataType;
+  try{
+    const r=await api('/api/admin/me/records?data_type='+browseDataType+'&limit=50&offset='+browseOffset);
+    if(!r.ok)return;
+    browseTotal=r.data.total;
+    document.getElementById('browse-page-info').textContent=(browseOffset+1)+'-'+Math.min(browseOffset+50,browseTotal)+' / '+browseTotal;
+    const div=document.getElementById('browse-content');
+    if(!r.data.records.length){div.innerHTML='<p>No records found</p>';return}
+    let h='<table><tr><th>Key</th><th>Data</th><th>Updated</th></tr>';
+    r.data.records.forEach(r=>{
+      h+='<tr><td>'+r.data_key+'</td><td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+JSON.stringify(r.payload).substring(0,120)+'</td><td>'+r.updated_at+'</td></tr>'
+    });
+    h+='</table>';
+    div.innerHTML=h;
+  }catch(e){}
+}
+
+function browsePage(dir){
+  const step=50;
+  let n=browseOffset+dir*step;
+  if(n<0)n=0;if(n>=browseTotal)n=browseTotal-step;
+  browseRecords(undefined,n);
+}
+
+async function loadUsers(){
+  try{
+    const r=await api('/api/admin/users');
+    if(!r.ok)return;
+    const tbody=document.getElementById('user-list');
+    tbody.innerHTML=r.data.map(u=>
+      '<tr><td>'+u.id+'</td><td>'+u.username+'</td><td>'+(u.is_admin?'Yes':'')+'</td><td>'+u.created_at+'</td>'+
+      '      <td><button class="btn btn-sm btn-primary" onclick="viewUser('+u.id+',\''+u.username+'\')">View</button> '+
+      '<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="changePass('+u.id+',\''+u.username+'\')">Pwd</button> '+
+      (u.id!==userId?'<button class="btn btn-sm btn-danger" onclick="deleteUser('+u.id+')">Del</button>':'')+'</td></tr>'
+    ).join('');
+  }catch(e){}
+}
+
+async function viewUser(uid,uname){
+  try{
+    const r=await api('/api/admin/users/'+uid+'/data');
+    if(!r.ok)return;
+    document.getElementById('user-detail-card').style.display='';
+    document.getElementById('detail-username').textContent=uname;
+    const div=document.getElementById('user-detail-content');
+    let h='<table><tr><th>Data Type</th><th>Records</th><th>Last Updated</th></tr>';
+    (r.data.records||[]).forEach(r=>h+='<tr><td>'+r.data_type+'</td><td>'+r.count+'</td><td>'+(r.last_updated||'-')+'</td></tr>');
+    h+='</table>';
+    div.innerHTML=h;
+  }catch(e){}
+}
+
+async function deleteUser(uid){
+  if(!confirm('Delete user '+uid+' and all their data?'))return;
+  await api('/api/admin/users/'+uid,{method:'DELETE'});
+  loadUsers();
+}
+
+async function changePass(uid,uname){
+  const pw=prompt('New password for '+uname+':');
+  if(!pw||pw.length<6){alert('Password must be at least 6 characters');return}
+  const r=await api('/api/admin/users/'+uid+'/password',{method:'PUT',body:JSON.stringify({password:pw})});
+  if(r.ok)alert('Password updated');else alert('Error: '+r.error);
+}
+
+// Auto-detect server URL from current page
+document.addEventListener('DOMContentLoaded',()=>{
+  const u=window.location.origin;
+  document.getElementById('server-url').value=u;
+  document.getElementById('server-url').placeholder=u;
+});
+</script>
+</body>
+</html>

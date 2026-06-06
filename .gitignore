@@ -100,9 +100,17 @@ local.properties
 **/windows/flutter/generated_plugin_registrant.*
 **/windows/flutter/generated_plugins.cmake
 
-# Rust (rhttp plugin) related
+# Rust (rhttp plugin + sync server) related
 **/rust/target/
 **/rust/.cargo/
+server/target/
+
+# Environment files (contain secrets)
+.env
+!.env.example
+
+# Caddy data
+caddy_data/
 
 # Exceptions to above rules.
 !**/ios/**/default.mode1v3

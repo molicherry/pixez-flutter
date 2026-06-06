@@ -1,0 +1,45 @@
+services:
+  api:
+    image: pixez-flutter-api:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-pixez}:${DB_PASS}@db:5432/${DB_NAME:-pixez_sync}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.pixez-sync.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.pixez-sync.entrypoints=websecure"
+      - "traefik.http.routers.pixez-sync.tls=true"
+      - "traefik.http.services.pixez-sync.loadbalancer.server.port=8080"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-pixez}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME:-pixez_sync}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pixez} -d ${DB_NAME:-pixez_sync}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+
+networks:
+  proxy:
+    external: true

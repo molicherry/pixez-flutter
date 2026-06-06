@@ -1,0 +1,9 @@
+# For IP-only access (no domain)
+:80 {
+    reverse_proxy api:8080
+}
+
+# For domain-based access, replace your-domain.com and comment out the :80 block above:
+# your-domain.com {
+#     reverse_proxy api:8080
+# }

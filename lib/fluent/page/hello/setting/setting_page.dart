@@ -32,6 +32,7 @@ import 'package:pixez/fluent/page/book/tag/book_tag_page.dart';
 import 'package:pixez/fluent/page/hello/recom/recom_manga_page.dart';
 import 'package:pixez/fluent/page/hello/setting/data_export_page.dart';
 import 'package:pixez/fluent/page/hello/setting/setting_quality_page.dart';
+import 'package:pixez/page/sync/sync_setting_page.dart';
 import 'package:pixez/fluent/page/history/history_page.dart';
 import 'package:pixez/fluent/page/login/login_page.dart';
 import 'package:pixez/fluent/page/network/network_setting_page.dart';
@@ -243,6 +244,17 @@ class _SettingPageState extends State<SettingPage> {
                 DataExportPage(),
                 icon: Icon(FluentIcons.database),
                 title: Text(I18n.of(context).app_data),
+              ),
+            ),
+            ListTile(
+              leading: Icon(FluentIcons.sync),
+              title: Text(I18n.of(context).sync_settings),
+              trailing: Icon(FluentIcons.chevron_right),
+              onPressed: () => Leader.push(
+                context,
+                SyncSettingPage(),
+                icon: Icon(FluentIcons.sync),
+                title: Text(I18n.of(context).sync_settings),
               ),
             ),
           ],

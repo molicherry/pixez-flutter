@@ -1,0 +1,57 @@
+name: Build Android
+
+on:
+  push:
+    paths-ignore:
+      - 'server/**'
+      - '.github/**'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Restore rhttp dependencies
+        working-directory: plugins/rhttp
+        run: flutter pub get --no-example
+
+      - name: Restore PixEz dependencies
+        run: flutter pub get --no-example
+
+      - name: Generate rhttp code
+        working-directory: plugins/rhttp
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Generate PixEz code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixez-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk

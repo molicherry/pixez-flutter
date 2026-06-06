@@ -33,6 +33,7 @@ import 'package:pixez/page/novel/history/novel_history_store.dart';
 import 'package:pixez/page/splash/splash_page.dart';
 import 'package:pixez/page/splash/splash_store.dart';
 import 'package:pixez/paths_plugin.dart';
+import 'package:pixez/page/sync/sync_setting_page.dart';
 import 'package:pixez/single_instance_plugin.dart';
 import 'package:pixez/src/generated/i18n/app_localizations.dart';
 import 'package:pixez/store/account_store.dart';
@@ -43,6 +44,8 @@ import 'package:pixez/store/save_store.dart';
 import 'package:pixez/store/tag_history_store.dart';
 import 'package:pixez/store/top_store.dart';
 import 'package:pixez/store/user_setting.dart';
+import 'package:pixez/sync/sync_config.dart';
+import 'package:pixez/sync/sync_engine.dart';
 import 'package:rhttp/rhttp.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -59,6 +62,8 @@ final BookTagStore bookTagStore = BookTagStore();
 final SplashStore splashStore = SplashStore();
 final Fetcher fetcher = new Fetcher();
 final FullScreenStore fullScreenStore = FullScreenStore();
+final SyncConfig syncConfig = SyncConfig();
+SyncEngine? syncEngine;
 
 main(List<String> args) async {
   await Rhttp.init();
@@ -98,6 +103,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState(() {
       _appState = state;
     });
+    if (state == AppLifecycleState.resumed) {
+      _triggerAutoSync();
+    }
   }
 
   @override
@@ -124,6 +132,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     accountStore.fetch();
     bookTagStore.init();
     muteStore.init();
+    _initSync();
 
     super.initState();
     if (Platform.isIOS) WidgetsBinding.instance.addObserver(this);
@@ -131,6 +140,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     Future.delayed(Duration.zero, () {
       SingleInstancePlugin.argsParser(widget.arguments);
     });
+  }
+
+  void _initSync() async {
+    await syncConfig.init();
+    syncEngine = SyncEngine(syncConfig);
+    Future.delayed(const Duration(seconds: 3), _triggerAutoSync);
+  }
+
+  void _triggerAutoSync() {
+    if (syncConfig.enabled && syncConfig.token.isNotEmpty) {
+      syncEngine?.pushAll().then((_) => syncEngine?.pullAll());
+    }
   }
 
   @override
